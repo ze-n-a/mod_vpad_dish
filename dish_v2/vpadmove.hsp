@@ -1,0 +1,105 @@
+#include "mod_vpad_dish.as"
+
+	#packopt xsize 640
+	#packopt ysize 640
+	screen 0,640,640
+
+	;キー表示用
+	keylbls="←,↑,→,↓,Spc,Ent,Ctrl,ESC,LClk,RClk,Tab,Z,X,C,A,W,D,S"
+	sdim keylbl,5,18
+	i=0:repeat 18:getstr keylbl(cnt),keylbls,i,',':i+=strsize:loop
+	
+	;VPADタイプ切り替え
+	vptype(0)=0:vptstr(0)="0=標準PAD"
+	vptype(1)=1:vptstr(1)="1=右操作"
+	vptype(2)=2:vptstr(2)="2=上部PAD"
+	vptype(3)=1+2:vptstr(3)="1+2=上部PAD右操作"
+	vptype(4)=1+2+4:vptstr(4)="1+2+4=上部右操作移動のみ"
+	vptype(5)=2+8:vptstr(5)="2+8=上部ダブルPAD"
+	vptype(6)=4:vptstr(6)="4=移動のみ"
+	vptype(7)=1+4:vptstr(7)="1+4=右操作移動のみ"
+	vptype(8)=4+8:vptstr(8)="4+8=移動のみA/W/D/S"
+	vptype(9)=16:vptstr(9)="16=左右パッド"
+	vptype(10)=32:vptstr(10)="32=2ボタン"
+	vptype(11)=16+32:vptstr(11)="16+32=左右2Bパッド"
+	vptype(12)=1+16+32:vptstr(12)="1+16+32=右操作左右2Bパッド"
+	vptype(13)=8:vptstr(13)="8=ダブルPAD"
+	vt=13
+	
+	;
+	;	バーチャルパッドで画像を動かす
+	;
+*init
+	hspvpad_init 1,vptype(vt)+64	; バーチャルパッドの初期化
+	
+	msy=0:py=16:if vptype(vt)&2:msy=ginfo_sy/10*7:py=ginfo_sy-80
+	hspvpad_addkey ginfo_sx-80,py,512,3	; 左クリック
+
+	celload "testchr.png"		; 元画像ファイル
+	face=stat					; 元画像のIDを保存
+	celdiv face,64,64
+
+	mx=400						; X座標
+	my=200						; Y座標
+	mx2=200						; X座標
+	my2=200						; Y座標
+	msp=4						; スピード
+*main
+	stick key,256+15+$3C000			; キー入力＋(A/W/D/S)追加
+	hspvpad_key key,256+15+$3C000	; バーチャルパッドのキーを読み取る
+
+	if key&512{					; VPAD切り替え
+		vt+:if vt>13:vt=0
+		goto *init
+	}
+
+	if key&1 : mx=mx-msp
+	if key&4 : mx=mx+msp
+	if key&2 : my=my-msp
+	if key&8 : my=my+msp
+	mx=limit(mx,-32,ginfo_sx-32)	;画面内のみ
+	my=limit(my,-32,ginfo_sy-32)	;画面内のみ
+
+	if key&$04000 : mx2=mx2-msp
+	if key&$10000 : mx2=mx2+msp
+	if key&$08000 : my2=my2-msp
+	if key&$20000 : my2=my2+msp
+	mx2=limit(mx2,-32,ginfo_sx-32)	;画面内のみ
+	my2=limit(my2,-32,ginfo_sy-32)	;画面内のみ
+
+	if key&16 : ksp+:if ksp>9:ksp=0	;□
+	if key&2048 : kz+:if kz>9:kz=0	;○
+	if key&4096 : kx+:if kx>9:kx=0	;△
+	if key&8192 : kc+:if kc>9:kc=0	;×
+	
+	redraw 0					; 描画始め
+
+	color 0,0,64
+	boxf						; 背景を消す
+
+	gmode 2						; 透明色ありの指定
+	color 255:line mx+32,my+32,mx2+32,my2+32
+	pos mx,my					; 表示位置の設定
+	celput face,0				; 画像コピー
+	pos mx2,my2					; 表示位置の設定
+	celput face,1				; 画像コピー
+
+	color 255,0,255
+	hspvpad_put mykey				; バーチャルパッドを表示する
+
+	color 255,255,255
+	font "",24
+	pos 0,msy:mes "VPAD: "+vptstr(vt)
+	mes strf("key(hex): 0x%08X △:%d ○:%d ×:%d □:%d",key,kx,kz,kc,ksp)
+	s="":i=key
+	repeat 18
+		if i&1:s+=strf("[%s](0x%X)\n",keylbl(cnt),1<<cnt)
+		i=i>>1
+	loop
+	mes s
+
+	redraw 1					; 描画終わり
+	await 20
+
+	goto *main
+
